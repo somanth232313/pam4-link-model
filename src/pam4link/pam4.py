@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.special import erfc, erfcinv
 
 LEVELS = np.array([-3.0, -1.0, 1.0, 3.0])
 THRESHOLDS = np.array([-2.0, 0.0, 2.0])
@@ -29,14 +28,36 @@ def slice_symbols(y: np.ndarray) -> np.ndarray:
     return np.digitize(y, THRESHOLDS)
 
 
+def erfc(x):
+    """Complementary error function, relative error < 1.2e-7 everywhere (Numerical Recipes erfcc).
+
+    Kept in NumPy so the package has no SciPy dependency (smaller serverless bundle).
+    """
+    x = np.asarray(x, dtype=float)
+    z = np.abs(x)
+    t = 1.0 / (1.0 + 0.5 * z)
+    poly = -z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (
+        -0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (
+            -0.82215223 + t * 0.17087277))))))))
+    with np.errstate(over="ignore", invalid="ignore"):
+        r = np.where(np.isinf(z), 0.0, t * np.exp(poly))
+    return np.where(x >= 0, r, 2.0 - r)
+
+
 def q_func(x):
     """Gaussian tail probability Q(x)."""
     return 0.5 * erfc(np.asarray(x) / np.sqrt(2.0))
 
 
 def q_inv(p):
-    """Inverse of :func:`q_func`."""
-    return np.sqrt(2.0) * erfcinv(2.0 * np.asarray(p))
+    """Inverse of :func:`q_func` for 0 < p < 0.5 (Newton's method on ln Q)."""
+    p = np.asarray(p, dtype=float)
+    x = np.sqrt(-2.0 * np.log(p))  # asymptotic starting point, always above the root
+    for _ in range(50):
+        q = q_func(x)
+        pdf = np.exp(-0.5 * x * x) / np.sqrt(2 * np.pi)
+        x = x + (np.log(q) - np.log(p)) * q / pdf
+    return x
 
 
 def ber_from_q(q):

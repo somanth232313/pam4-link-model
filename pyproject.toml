@@ -7,10 +7,11 @@ name = "pam4link"
 version = "0.1.0"
 description = "Behavioral model of a 106.25 Gb/s PAM4 electro-optical link"
 requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "matplotlib"]
+dependencies = ["numpy"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+plots = ["matplotlib"]
+dev = ["matplotlib", "pytest"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

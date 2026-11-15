@@ -37,7 +37,7 @@ what Monte Carlo can resolve (used for the bathtub curves and sensitivity).
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 python scripts/run_demo.py          # full run, writes plots/ and plots/metrics.json
 python scripts/run_demo.py --quick  # faster, fewer symbols
@@ -51,6 +51,20 @@ from pam4link import LinkConfig, simulate
 res = simulate(replace(LinkConfig(), fiber_loss_db=12, ctle_peaking_db=6))
 print(res.ber, res.ber_statistical, res.eye_opening())
 ```
+
+## Interactive web demo
+
+`app.py` is a dependency-free WSGI app (NumPy only) that serves `public/index.html` and a JSON API.
+Sliders for received power, extinction ratio, channel loss, TIA noise, CTLE peaking, FFE taps and jitter
+re-run the simulator (~1.3 s per run) and redraw the eye diagrams, bathtub, BER-vs-power curve,
+frequency responses and FFE taps.
+
+```bash
+python app.py                     # http://127.0.0.1:8000
+curl -X POST localhost:8000/api/simulate -d '{"rx_power_dbm": -8, "ffe_taps": 7}'
+```
+
+Deployed on Vercel: the Python runtime picks up `app.py` and installs `requirements.txt` (NumPy only).
 
 ## Tests
 
@@ -89,4 +103,4 @@ opens it to about 60 % of ideal height. Monte Carlo and statistical BER agree wh
 
 ## Layout
 
-`src/pam4link/` model · `scripts/` demo · `tests/` pytest regression · `plots/` generated figures
+`src/pam4link/` model + web service · `app.py` + `public/` web demo · `scripts/` plot generator · `tests/` pytest regression · `plots/` generated figures

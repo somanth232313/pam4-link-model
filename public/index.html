@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAM4 Link Simulator</title>
+<meta name="description" content="Interactive behavioral model of a 106.25 Gb/s PAM4 electro-optical link: eye diagrams, bathtub curves and BER vs. received power.">
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #14181f; --muted: #5b6472; --line: #dde1e7;
+  --accent: #2563eb; --accent-ink: #ffffff; --good: #15803d; --bad: #b91c1c;
+  --s1: #2563eb; --s2: #d97706; --s3: #059669; --grid: #e8ebf0; --scope: #0b0d12;
+  --radius: 10px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --panel: #161a21; --ink: #e7eaf0; --muted: #98a2b3; --line: #262c36;
+    --accent: #60a5fa; --accent-ink: #0b1220; --good: #4ade80; --bad: #f87171;
+    --s1: #60a5fa; --s2: #fbbf24; --s3: #34d399; --grid: #222833; --scope: #07090c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --panel: #161a21; --ink: #e7eaf0; --muted: #98a2b3; --line: #262c36;
+  --accent: #60a5fa; --accent-ink: #0b1220; --good: #4ade80; --bad: #f87171;
+  --s1: #60a5fa; --s2: #fbbf24; --s3: #34d399; --grid: #222833; --scope: #07090c;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0; max-width: 720px; }
+header a { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
+header a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.controls { position: sticky; top: 16px; }
+.controls h2, .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+.ctl { margin-bottom: 14px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; margin-bottom: 4px; }
+.ctl output { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+.group { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 12px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+button {
+  font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; width: 100%; padding: 8px; }
+.status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 20px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.metric { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.metric .k { font-size: 12px; color: var(--muted); }
+.metric .v { font-size: 22px; font-weight: 650; font-family: var(--mono); margin-top: 2px; }
+.metric .n { font-size: 12px; color: var(--muted); }
+.pass { color: var(--good); } .fail { color: var(--bad); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 10px; min-width: 0; }
+.card p.note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+canvas { width: 100%; display: block; }
+.eye canvas { aspect-ratio: 4 / 3; border-radius: 6px; background: var(--scope); }
+.chart canvas { aspect-ratio: 16 / 10; }
+.chain { font-family: var(--mono); font-size: 12.5px; color: var(--muted); overflow-x: auto; white-space: pre; margin: 0; }
+main { min-width: 0; }
+.busy { opacity: 0.55; transition: opacity 0.15s; }
+footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .controls { position: static; }
+  .grid2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>106.25 Gb/s PAM4 Optical Link Simulator</h1>
+      <p class="sub">Behavioral model of a single-lane PAM4 electro-optical link. Move a slider and the server
+        re-runs the full simulation: transmitter, channel, optics, TIA noise, CTLE, jitter and an LMS-adapted FFE.</p>
+    </div>
+    <a href="https://github.com/somanth232313/pam4-link-model" target="_blank" rel="noopener">Source on GitHub →</a>
+  </header>
+
+  <div class="layout">
+    <aside class="panel controls">
+      <h2>Link settings</h2>
+      <div class="presets">
+        <button data-preset="default">Default</button>
+        <button data-preset="noeq">No equalization</button>
+        <button data-preset="ctle">CTLE only</button>
+        <button data-preset="stress">Stressed</button>
+      </div>
+      <div id="controls"></div>
+      <button class="primary" id="run">Run simulation</button>
+      <div class="status" id="status">Loading…</div>
+    </aside>
+
+    <main id="main">
+      <section class="metrics">
+        <div class="metric"><div class="k">BER (statistical)</div><div class="v" id="m-stat">–</div><div class="n" id="m-kp4">&nbsp;</div></div>
+        <div class="metric"><div class="k">BER (Monte Carlo)</div><div class="v" id="m-mc">–</div><div class="n" id="m-bits">&nbsp;</div></div>
+        <div class="metric"><div class="k">Vertical eye opening</div><div class="v" id="m-eye">–</div><div class="n" id="m-eye-pre">&nbsp;</div></div>
+        <div class="metric"><div class="k">Eye width @ KP4</div><div class="v" id="m-width">–</div><div class="n">horizontal, from bathtub</div></div>
+      </section>
+
+      <section class="grid2">
+        <div class="card eye"><h2>Eye: receiver (after TIA + CTLE)</h2><canvas id="eye-rx" width="640" height="480"></canvas></div>
+        <div class="card eye"><h2>Eye: after FFE</h2><canvas id="eye-eq" width="640" height="480"></canvas>
+          <p class="note" id="eye-eq-note"></p></div>
+      </section>
+
+      <section class="grid2">
+        <div class="card chart"><h2>Bathtub curve</h2><canvas id="c-bathtub" width="640" height="400"></canvas>
+          <p class="note">Statistical BER vs. sampling-phase offset. Dashed line: KP4 FEC limit (2.4×10⁻⁴).</p></div>
+        <div class="card chart"><h2>BER vs. received power</h2><canvas id="c-power" width="640" height="400"></canvas>
+          <p class="note">Same receiver settings swept over average received optical power. Dot: current setting.</p></div>
+      </section>
+
+      <section class="grid2">
+        <div class="card chart"><h2>Frequency response</h2><canvas id="c-freq" width="640" height="400"></canvas>
+          <p class="note">Blue: host channel + driver. Amber: TIA + CTLE. Green: end to end. Dashed: Nyquist (26.6 GHz).</p></div>
+        <div class="card chart"><h2>Adapted FFE taps</h2><canvas id="c-taps" width="640" height="400"></canvas>
+          <p class="note">Normalized LMS, trained on known symbols. Tap 0 is the main cursor.</p></div>
+      </section>
+
+      <section class="card">
+        <h2>Signal chain</h2>
+<pre class="chain">PRBS31 → PAM4 (Gray) → DAC → host channel loss → driver (BW + compression) → modulator (ER)
+  → fiber loss → photodiode → + TIA input noise → TIA BW → CTLE → jittered sampling (RJ + SJ)
+  → LMS FFE → slicer → BER (counted)  +  statistical BER (noiseless samples + Gaussian σ)</pre>
+      </section>
+    </main>
+  </div>
+  <footer>Built with NumPy · 53.125 GBd · 16 samples/UI · 16,384 symbols per run</footer>
+</div>
+
+<script>
+"use strict";
+const CONTROLS = [
+  { group: "Optics" },
+  { id: "rx_power_dbm", label: "Received power", unit: "dBm", min: -14, max: -2, step: 0.5, value: -6, fmt: v => v.toFixed(1) },
+  { id: "extinction_ratio_db", label: "Extinction ratio", unit: "dB", min: 3, max: 8, step: 0.5, value: 5, fmt: v => v.toFixed(1) },
+  { group: "Electrical" },
+  { id: "host_channel_loss_db", label: "Channel loss @ Nyquist", unit: "dB", min: 0, max: 16, step: 0.5, value: 10, fmt: v => v.toFixed(1) },
+  { id: "tia_noise_pa", label: "TIA noise", unit: "pA/√Hz", min: 5, max: 30, step: 1, value: 15, fmt: v => v.toFixed(0) },
+  { group: "Equalization" },
+  { id: "ctle_peaking_db", label: "CTLE peaking", unit: "dB", min: 0, max: 12, step: 0.5, value: 6, fmt: v => v.toFixed(1) },
+  { id: "ffe_taps", label: "FFE taps", unit: "", min: 0, max: 11, step: 1, value: 7, fmt: v => v < 2 ? "off" : v.toFixed(0) },
+  { group: "Clock jitter" },
+  { id: "rj_rms_ui", label: "Random jitter", unit: "UI rms", min: 0, max: 0.05, step: 0.005, value: 0.01, fmt: v => v.toFixed(3) },
+  { id: "sj_pp_ui", label: "Sinusoidal jitter", unit: "UI pp", min: 0, max: 0.3, step: 0.01, value: 0.05, fmt: v => v.toFixed(2) },
+];
+const PRESETS = {
+  default: {},
+  noeq: { ctle_peaking_db: 0, ffe_taps: 0 },
+  ctle: { ffe_taps: 0 },
+  stress: { rx_power_dbm: -9, host_channel_loss_db: 14, rj_rms_ui: 0.02, sj_pp_ui: 0.12 },
+};
+
+const $ = id => document.getElementById(id);
+const inputs = {};
+
+function buildControls() {
+  const box = $("controls");
+  for (const c of CONTROLS) {
+    if (c.group) {
+      const g = document.createElement("div");
+      g.className = "group";
+      g.innerHTML = `<h2>${c.group}</h2>`;
+      box.appendChild(g);
+      continue;
+    }
+    const d = document.createElement("div");
+    d.className = "ctl";
+    d.innerHTML = `<label for="${c.id}"><span>${c.label}</span><output id="${c.id}-out"></output></label>
+      <input type="range" id="${c.id}" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.value}">`;
+    box.lastChild.appendChild(d);
+    const input = d.querySelector("input");
+    const out = d.querySelector("output");
+    const show = () => { const v = +input.value; out.textContent = c.fmt(v) + (c.unit && !(c.id === "ffe_taps") ? " " + c.unit : ""); };
+    input.addEventListener("input", show);
+    input.addEventListener("change", scheduleRun);
+    show();
+    inputs[c.id] = { input, show, def: c.value };
+  }
+}
+
+function applyPreset(name) {
+  const p = PRESETS[name] || {};
+  for (const [id, o] of Object.entries(inputs)) {
+    o.input.value = id in p ? p[id] : o.def;
+    o.show();
+  }
+  scheduleRun();
+}
+
+let timer = null, controller = null;
+function scheduleRun() { clearTimeout(timer); timer = setTimeout(runSim, 250); }
+
+async function runSim() {
+  if (controller) controller.abort();
+  controller = new AbortController();
+  const params = {};
+  for (const [id, o] of Object.entries(inputs)) params[id] = +o.input.value;
+  $("main").classList.add("busy");
+  $("status").textContent = "Simulating…";
+  try {
+    const r = await fetch("/api/simulate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params), signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`server returned ${r.status}`);
+    const data = await r.json();
+    render(data);
+    $("status").textContent = `Done in ${data.elapsed_s.toFixed(2)} s`;
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    $("status").textContent = "Simulation failed: " + e.message;
+  } finally {
+    $("main").classList.remove("busy");
+  }
+}
+
+// ---------- formatting ----------
+function fmtBer(b) {
+  if (b === null || b === undefined) return "–";
+  if (b <= 0) return "0";
+  if (b < 1e-15) return "<1e-15";
+  const e = Math.floor(Math.log10(b));
+  return `${(b / 10 ** e).toFixed(1)}e${e}`;
+}
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---------- canvas helpers ----------
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+function niceTicks(lo, hi, n) {
+  const span = hi - lo, step0 = span / n;
+  const mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0) || step0;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+
+/** Line chart. series: [{x:[], y:[], color, dash, points}] */
+function lineChart(cv, series, o) {
+  const { ctx, w, h } = setupCanvas(cv);
+  const pad = { l: 52, r: 12, t: 10, b: 36 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  const ty = v => o.logY ? Math.log10(Math.max(v, 10 ** o.yMin)) : v;
+  const X = x => pad.l + (x - o.xMin) / (o.xMax - o.xMin) * pw;
+  const Y = y => pad.t + (1 - (ty(y) - o.yMin) / (o.yMax - o.yMin)) * ph;
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.strokeStyle = css("--grid"); ctx.fillStyle = css("--muted"); ctx.lineWidth = 1;
+  const yt = o.logY ? Array.from({ length: Math.floor((o.yMax - o.yMin) / 2) + 1 }, (_, i) => o.yMin + 2 * i) : niceTicks(o.yMin, o.yMax, 5);
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const t of yt) {
+    const yy = pad.t + (1 - (t - o.yMin) / (o.yMax - o.yMin)) * ph;
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(pad.l + pw, yy); ctx.stroke();
+    ctx.fillText(o.logY ? `1e${t}` : `${t}`, pad.l - 6, yy);
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const t of niceTicks(o.xMin, o.xMax, 6)) {
+    const xx = X(t);
+    ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, pad.t + ph); ctx.stroke();
+    ctx.fillText(`${t}`, xx, pad.t + ph + 6);
+  }
+  ctx.fillText(o.xLabel, pad.l + pw / 2, h - 14);
+  ctx.save(); ctx.translate(12, pad.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.yLabel, 0, -6); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(pad.l, pad.t, pw, ph); ctx.clip();
+  for (const hl of o.hlines || []) {
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = css("--muted");
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(hl)); ctx.lineTo(pad.l + pw, Y(hl)); ctx.stroke();
+  }
+  for (const vl of o.vlines || []) {
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = css("--muted");
+    ctx.beginPath(); ctx.moveTo(X(vl), pad.t); ctx.lineTo(X(vl), pad.t + ph); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const s of series) {
+    ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.width || 2;
+    if (s.stem) {
+      s.x.forEach((x, i) => {
+        ctx.beginPath(); ctx.moveTo(X(x), Y(0)); ctx.lineTo(X(x), Y(s.y[i])); ctx.stroke();
+        ctx.beginPath(); ctx.arc(X(x), Y(s.y[i]), 4, 0, 2 * Math.PI); ctx.fill();
+      });
+      continue;
+    }
+    ctx.beginPath();
+    let started = false;
+    s.x.forEach((x, i) => {
+      const y = s.y[i];
+      if (y === null || y === undefined || (o.logY && y <= 0)) { started = false; return; }
+      if (!started) { ctx.moveTo(X(x), Y(y)); started = true; } else ctx.lineTo(X(x), Y(y));
+    });
+    ctx.stroke();
+    for (const p of s.points || []) { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 5, 0, 2 * Math.PI); ctx.fill(); }
+  }
+  ctx.restore();
+  ctx.strokeStyle = css("--line"); ctx.strokeRect(pad.l, pad.t, pw, ph);
+}
+
+// magma-like colormap
+const CMAP = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
+function cmap(t) {
+  const x = Math.min(Math.max(t, 0), 1) * (CMAP.length - 1), i = Math.min(Math.floor(x), CMAP.length - 2), f = x - i;
+  return CMAP[i].map((c, k) => Math.round(c + (CMAP[i + 1][k] - c) * f));
+}
+
+function eyeChart(cv, eye) {
+  const { ctx, w, h } = setupCanvas(cv);
+  ctx.fillStyle = css("--scope"); ctx.fillRect(0, 0, w, h);
+  if (!eye) {
+    ctx.fillStyle = "#98a2b3"; ctx.font = "14px system-ui, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("FFE is off", w / 2, h / 2);
+    return;
+  }
+  const { cols, rows, density } = eye;
+  const img = new ImageData(cols, rows);
+  const logs = density.map(v => Math.log1p(v)), mx = Math.max(...logs) || 1;
+  logs.forEach((v, i) => {
+    const [r, g, b] = cmap(v / mx);
+    img.data.set([r, g, b, v > 0 ? 255 : 0], i * 4);
+  });
+  const off = document.createElement("canvas");
+  off.width = cols; off.height = rows;
+  off.getContext("2d").putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "11px system-ui, sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("−1 UI", 6, h - 8); ctx.textAlign = "right"; ctx.fillText("+1 UI", w - 6, h - 8);
+  ctx.textAlign = "center"; ctx.fillText("sampling point", w / 2, 14);
+}
+
+// ---------- render ----------
+let last = null;
+function render(d) {
+  last = d;
+  const m = d.metrics;
+  $("m-stat").textContent = fmtBer(m.ber_statistical);
+  $("m-kp4").innerHTML = m.passes_kp4 ? '<span class="pass">✓ below KP4 FEC limit</span>' : '<span class="fail">✗ above KP4 FEC limit</span>';
+  $("m-mc").textContent = fmtBer(m.ber_monte_carlo);
+  $("m-bits").textContent = `${m.bit_errors.toLocaleString()} errors / ${m.bits.toLocaleString()} bits`;
+  const eye = v => v <= 0 ? "closed" : `${(100 * v).toFixed(0)}%`;
+  $("m-eye").textContent = eye(m.eye_opening);
+  $("m-eye-pre").textContent = d.params.ffe_taps ? `before FFE: ${eye(m.eye_opening_before_ffe)}` : "FFE off";
+  $("m-width").textContent = `${m.eye_width_ui.toFixed(2)} UI`;
+
+  eyeChart($("eye-rx"), d.eye_rx);
+  eyeChart($("eye-eq"), d.eye_eq);
+  $("eye-eq-note").textContent = d.eye_eq ? `${d.ffe.taps.length}-tap FFE output, re-timed by the sampling-clock jitter.` : "Turn FFE taps on to see the equalized eye.";
+
+  const c1 = css("--s1"), c2 = css("--s2"), c3 = css("--s3");
+  lineChart($("c-bathtub"), [{ x: d.bathtub.phase_ui, y: d.bathtub.ber, color: c1 }],
+    { xMin: -0.5, xMax: 0.5, logY: true, yMin: -14, yMax: 0, xLabel: "sampling phase offset (UI)", yLabel: "BER", hlines: [m.kp4_threshold] });
+  lineChart($("c-power"), [{ x: d.ber_vs_power.rx_power_dbm, y: d.ber_vs_power.ber, color: c3, points: [[m.rx_power_dbm, Math.max(m.ber_statistical, 1e-14)]] }],
+    { xMin: -14, xMax: -2, logY: true, yMin: -14, yMax: 0, xLabel: "received average optical power (dBm)", yLabel: "BER", hlines: [m.kp4_threshold] });
+  const fr = d.frequency_response;
+  lineChart($("c-freq"), [
+    { x: fr.f_ghz, y: fr.tx_db, color: c1 }, { x: fr.f_ghz, y: fr.rx_db, color: c2 }, { x: fr.f_ghz, y: fr.total_db, color: c3, width: 3 },
+  ], { xMin: 0, xMax: 106, yMin: -40, yMax: 10, xLabel: "frequency (GHz)", yLabel: "magnitude (dB)", vlines: [26.5625] });
+  const taps = d.ffe.taps, idx = taps.map((_, i) => i - d.ffe.pre);
+  const lo = Math.min(-0.4, ...taps) - 0.1, hi = Math.max(1.2, ...taps) + 0.1;
+  lineChart($("c-taps"), [{ x: idx, y: taps, color: c1, stem: true }],
+    { xMin: Math.min(...idx) - 1, xMax: Math.max(...idx) + 1, yMin: lo, yMax: hi, xLabel: "tap (UI from main cursor)", yLabel: "weight", hlines: [0] });
+}
+
+window.addEventListener("resize", () => { if (last) render(last); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (last) render(last); });
+document.querySelectorAll("[data-preset]").forEach(b => b.addEventListener("click", () => applyPreset(b.dataset.preset)));
+$("run").addEventListener("click", runSim);
+buildControls();
+runSim();
+</script>
+</body>
+</html>

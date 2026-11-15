@@ -7,7 +7,6 @@ as periodic and no edge transients appear).
 from __future__ import annotations
 
 import numpy as np
-from scipy import signal
 
 
 def apply_response(x: np.ndarray, h: np.ndarray) -> np.ndarray:
@@ -19,8 +18,13 @@ def butterworth(f: np.ndarray, fc: float | None, order: int = 2) -> np.ndarray:
     """Causal analog Butterworth low-pass (driver / TIA bandwidth). ``None`` = ideal."""
     if fc is None:
         return np.ones_like(f, dtype=complex)
-    b, a = signal.butter(order, 2 * np.pi * fc, btype="low", analog=True)
-    _, h = signal.freqs(b, a, worN=2 * np.pi * f)
+    # left-half-plane poles on a circle of radius wc: H(s) = prod(-p_k / (s - p_k))
+    wc = 2 * np.pi * fc
+    poles = wc * np.exp(1j * np.pi * (2 * np.arange(order) + order + 1) / (2 * order))
+    s = 2j * np.pi * np.asarray(f, dtype=float)
+    h = np.ones_like(s)
+    for p in poles:
+        h = h * (-p / (s - p))
     return h
 
 

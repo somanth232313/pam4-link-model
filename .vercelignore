@@ -1,0 +1,8 @@
+.venv/
+tests/
+notebooks/
+scripts/
+plots/
+requirements-dev.txt
+__pycache__/
+*.pyc
