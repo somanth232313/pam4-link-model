@@ -1,0 +1,69 @@
+"""PAM4 symbol mapping, slicing and Gaussian-noise BER theory."""
+from __future__ import annotations
+
+import numpy as np
+from scipy.special import erfc, erfcinv
+
+LEVELS = np.array([-3.0, -1.0, 1.0, 3.0])
+THRESHOLDS = np.array([-2.0, 0.0, 2.0])
+
+# Gray code: symbol index -> (msb, lsb). Adjacent levels differ by one bit.
+GRAY_BITS = np.array([[0, 0], [0, 1], [1, 1], [1, 0]], dtype=np.uint8)
+_PAIR_TO_SYMBOL = np.array([0, 1, 3, 2])  # indexed by 2*msb + lsb
+
+
+def bits_to_symbols(bits: np.ndarray) -> np.ndarray:
+    """Map bit pairs (msb, lsb) to Gray-coded PAM4 symbol indices 0..3."""
+    bits = np.asarray(bits, dtype=np.uint8)
+    pairs = bits[: len(bits) // 2 * 2].reshape(-1, 2)
+    return _PAIR_TO_SYMBOL[2 * pairs[:, 0] + pairs[:, 1]]
+
+
+def symbols_to_bits(symbols: np.ndarray) -> np.ndarray:
+    """Inverse of :func:`bits_to_symbols`."""
+    return GRAY_BITS[np.asarray(symbols)].reshape(-1)
+
+
+def slice_symbols(y: np.ndarray) -> np.ndarray:
+    """Decide symbol indices from samples scaled to levels {-3, -1, 1, 3}."""
+    return np.digitize(y, THRESHOLDS)
+
+
+def q_func(x):
+    """Gaussian tail probability Q(x)."""
+    return 0.5 * erfc(np.asarray(x) / np.sqrt(2.0))
+
+
+def q_inv(p):
+    """Inverse of :func:`q_func`."""
+    return np.sqrt(2.0) * erfcinv(2.0 * np.asarray(p))
+
+
+def ber_from_q(q):
+    """Gray-coded PAM4 BER for Gaussian noise, where q = (half level spacing) / sigma.
+
+    SER = 2 (1 - 1/M) Q(q) = 1.5 Q(q); Gray coding gives one bit error per
+    (adjacent) symbol error, over 2 bits per symbol, so BER = 0.75 Q(q).
+    """
+    return 0.75 * q_func(q)
+
+
+def q_from_ber(ber):
+    """Inverse of :func:`ber_from_q`."""
+    return q_inv(np.asarray(ber) / 0.75)
+
+
+def statistical_ber(y_clean: np.ndarray, symbols: np.ndarray, sigma: float) -> float:
+    """Expected BER given noiseless slicer samples and Gaussian noise sigma.
+
+    Each sample's error probability is the Gaussian tail beyond its nearest
+    lower and upper decision thresholds, so ISI and jitter in ``y_clean`` are
+    accounted for exactly; only the noise is treated statistically.
+    """
+    symbols = np.asarray(symbols)
+    if sigma <= 0:  # noiseless: only samples already on the wrong side fail
+        return float(np.mean(slice_symbols(y_clean) != symbols) / 2.0)
+    lower = np.where(symbols > 0, THRESHOLDS[np.clip(symbols - 1, 0, 2)], -np.inf)
+    upper = np.where(symbols < 3, THRESHOLDS[np.clip(symbols, 0, 2)], np.inf)
+    p_sym = q_func((y_clean - lower) / sigma) + q_func((upper - y_clean) / sigma)
+    return float(np.mean(p_sym) / 2.0)

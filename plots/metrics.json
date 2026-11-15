@@ -1,0 +1,73 @@
+{
+  "config": {
+    "baud": 53125000000.0,
+    "sps": 32,
+    "n_symbols": 65536,
+    "prbs_order": 31,
+    "seed": 1,
+    "host_channel_loss_db": 10.0,
+    "driver_bw_hz": 32000000000.0,
+    "driver_compression": 0.5,
+    "launch_power_dbm": 0.0,
+    "extinction_ratio_db": 5.0,
+    "fiber_loss_db": 6.0,
+    "responsivity_a_per_w": 0.8,
+    "tia_bw_hz": 35000000000.0,
+    "tia_noise_density": 1.5e-11,
+    "ctle_peaking_db": 6.0,
+    "ctle_pole1_hz": null,
+    "ctle_pole2_hz": null,
+    "rj_rms_ui": 0.01,
+    "sj_pp_ui": 0.05,
+    "sj_freq_hz": 20000000.0,
+    "ffe_taps": 7,
+    "ffe_pre": 2,
+    "ffe_mu": 0.02,
+    "ffe_train": 8000
+  },
+  "results": {
+    "no equalization": {
+      "eye_opening_pct": -105.7033106649642,
+      "eye_width_ui_at_kp4": 0.0,
+      "ber_monte_carlo": 0.10257234726688103,
+      "bit_errors": 11803,
+      "bits": 115070,
+      "ber_statistical": 0.1021817611616601,
+      "sensitivity_dbm_at_kp4": null,
+      "ffe_taps": [
+        0.8969441026366702
+      ]
+    },
+    "CTLE": {
+      "eye_opening_pct": -50.53818956805589,
+      "eye_width_ui_at_kp4": 0.0,
+      "ber_monte_carlo": 0.04348657339011037,
+      "bit_errors": 5004,
+      "bits": 115070,
+      "ber_statistical": 0.044219763402935326,
+      "sensitivity_dbm_at_kp4": null,
+      "ffe_taps": [
+        0.9122971291103643
+      ]
+    },
+    "CTLE + FFE": {
+      "eye_opening_pct": 59.773265030069986,
+      "eye_width_ui_at_kp4": 0.18750000000000017,
+      "ber_monte_carlo": 0.0,
+      "bit_errors": 0,
+      "bits": 115058,
+      "ber_statistical": 2.5480739517810515e-06,
+      "sensitivity_dbm_at_kp4": -7.461680114403045,
+      "ffe_taps": [
+        -0.007647046410329347,
+        -0.23530808952578794,
+        1.022104633582038,
+        -0.09823431021003214,
+        0.027457772115371846,
+        -0.025008179310528116,
+        -0.01077948967505788
+      ]
+    }
+  },
+  "ffe_eye_opening_gain_pct_points": 110.31145459812588
+}
